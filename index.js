@@ -62,8 +62,13 @@ app.get('/', (_request, response) => {
   response.json({ name: 'WedPlan API', status: 'ok' })
 })
 
-app.get('/health', (_request, response) => {
-  response.json({ status: 'ok' })
+app.get('/health', async (_request, response) => {
+  try {
+    await database.command({ ping: 1 })
+    response.json({ status: 'ok' })
+  } catch {
+    response.status(503).json({ status: 'unavailable' })
+  }
 })
 
 // Public discovery only returns approved, available services from active vendors.
