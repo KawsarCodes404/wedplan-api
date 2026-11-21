@@ -567,7 +567,8 @@ function parseService(body = {}) {
   const description = cleanText(body.description, 2000)
   const location = cleanText(body.location, 160)
   const price = Number(body.price)
-  const images = Array.isArray(body.images) ? body.images.map(cleanImageUrl).filter(Boolean).slice(0, 6) : []
+  if (Array.isArray(body.images) && body.images.length > 6) return null
+  const images = Array.isArray(body.images) ? body.images.map(cleanImageUrl).filter(Boolean) : []
   if (!serviceName || !category || !description || !location || !Number.isFinite(price) || price < 0 || images.length === 0) return null
   return { serviceName, category, description, location, price, images }
 }
