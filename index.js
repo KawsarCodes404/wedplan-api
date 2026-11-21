@@ -37,10 +37,20 @@ await client.connect()
 
 const database = client.db(databaseName)
 const users = database.collection('user')
-const sessions = database.collection('session')
 const services = database.collection('services')
 const bookings = database.collection('bookings')
 const transactions = database.collection('transactions')
+
+await Promise.all([
+  services.createIndex({ status: 1, isActive: 1, createdAt: -1 }),
+  services.createIndex({ status: 1, isActive: 1, price: 1, createdAt: -1 }),
+  services.createIndex({ vendorId: 1, createdAt: -1 }),
+  bookings.createIndex({ customerId: 1, serviceId: 1, eventDate: 1, status: 1 }),
+  bookings.createIndex({ customerId: 1, createdAt: -1 }),
+  bookings.createIndex({ vendorId: 1, createdAt: -1 }),
+  transactions.createIndex({ vendorId: 1, createdAt: -1 }),
+  transactions.createIndex({ stripeSessionId: 1 }),
+])
 
 const categories = [
   'Photography & Videography',
