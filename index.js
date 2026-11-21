@@ -52,12 +52,7 @@ const validRoles = ['admin', 'vendor', 'customer']
 const validServiceStatuses = ['Pending', 'Approved', 'Rejected']
 const validBookingStatuses = ['Pending', 'Accepted', 'Rejected', 'Cancelled']
 
-const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:3000')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean)
-
-app.use(cors({ origin: allowedOrigins, credentials: true }))
+app.use(cors())
 
 // Stripe requires the unparsed request body to verify webhook signatures.
 app.post('/payments/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook)
@@ -415,7 +410,7 @@ app.get('/payments/checkout-session/:sessionId', verifyToken, requireRole('vendo
 app.post('/payments/checkout-session', verifyToken, requireRole('vendor'), async (request, response) => {
   if (!stripe) return response.status(503).json({ message: 'Payments are not configured.' })
   if (isPremium(request.user)) return response.status(409).json({ message: 'Your Premium plan is already active.' })
-  const origin = (process.env.CLIENT_URL || allowedOrigins[0] || '').replace(/\/$/, '')
+  const origin = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '')
   if (!origin) return response.status(503).json({ message: 'Application URL is not configured.' })
 
   const session = await stripe.checkout.sessions.create({
