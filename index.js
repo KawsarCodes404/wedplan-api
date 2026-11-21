@@ -4,8 +4,16 @@ import express from 'express'
 import { MongoClient, ObjectId } from 'mongodb'
 import Stripe from 'stripe'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { rateLimit } from 'express-rate-limit'
 
 const app = express()
+const imageUploadLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many image uploads. Try again in a few minutes.' },
+})
 const port = Number(process.env.PORT || 5000)
 const databaseName = process.env.DB_NAME || 'wed-plan'
 const authOrigin = new URL(process.env.BETTER_AUTH_URL || 'http://localhost:3000').origin
@@ -42,6 +50,7 @@ const bookings = database.collection('bookings')
 const transactions = database.collection('transactions')
 
 await Promise.all([
+  users.createIndex({ role: 1, isBlocked: 1 }),
   services.createIndex({ status: 1, isActive: 1, createdAt: -1 }),
   services.createIndex({ status: 1, isActive: 1, price: 1, createdAt: -1 }),
   services.createIndex({ vendorId: 1, createdAt: -1 }),
@@ -69,6 +78,45 @@ app.use(cors())
 
 // Stripe requires the unparsed request body to verify webhook signatures.
 app.post('/payments/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook)
+
+// Keep the ImgBB key on the API. This small public upload route is used before
+// sign-up too, so it has a file size limit and a per-IP rate limit.
+app.post('/images/upload', imageUploadLimit, express.raw({
+  type: 'multipart/form-data',
+  limit: '6mb',
+}), async (request, response) => {
+  const apiKey = process.env.IMGBB_API_KEY
+  if (!apiKey) return response.status(503).json({ message: 'Image uploads are not configured.' })
+
+  const contentType = request.headers['content-type'] || ''
+  const body = request.body
+  if (!/^multipart\/form-data;\s*boundary=/i.test(contentType) || !Buffer.isBuffer(body)) {
+    return response.status(400).json({ message: 'Choose an image to upload.' })
+  }
+
+  const partHeaders = body.toString('latin1')
+  const hasImageField = /content-disposition:[^\r\n]*name="image"/i.test(partHeaders)
+  const imageType = partHeaders.match(/content-type:\s*(image\/(?:png|jpeg|webp))/i)?.[1]
+  if (!hasImageField || !imageType) {
+    return response.status(400).json({ message: 'Upload a PNG, JPG, or WebP image.' })
+  }
+
+  try {
+    const upload = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body,
+    })
+    const result = await upload.json()
+    if (!upload.ok || !result.success || !result.data?.url) {
+      return response.status(502).json({ message: 'ImgBB could not store this image. Please try again.' })
+    }
+    return response.json({ url: result.data.url })
+  } catch {
+    return response.status(502).json({ message: 'Image upload failed. Please try again.' })
+  }
+})
+
 app.use(express.json({ limit: '1mb' }))
 
 app.get('/', (_request, response) => {
@@ -88,6 +136,15 @@ app.get('/health', async (_request, response) => {
 app.get('/services', async (request, response) => {
   const { search = '', category = '', location = '', sort = 'newest', featured } = request.query
   const filter = { status: 'Approved', isActive: { $ne: false } }
+  const blockedVendors = await users.find(
+    { role: 'vendor', isBlocked: true },
+    { projection: { _id: 1 } },
+  ).toArray()
+  if (blockedVendors.length) {
+    filter.vendorId = {
+      $nin: blockedVendors.flatMap((vendor) => [vendor._id, userId(vendor)]),
+    }
+  }
 
   if (category && categories.includes(String(category))) filter.category = String(category)
   if (featured === 'true') filter.featured = true
@@ -125,6 +182,7 @@ app.get('/services/:id', async (request, response) => {
   }
 
   const [enriched] = await addVendorDetails([service])
+  if (!enriched?.vendor) return response.status(404).json({ message: 'Wedding service not found.' })
   return response.json(enriched)
 })
 
@@ -218,10 +276,8 @@ app.patch('/vendor/services/:id/availability', verifyToken, requireRole('vendor'
     return response.status(409).json({ message: 'Only approved services can be made available.' })
   }
   if (request.body.isActive && !isPremium(request.user)) {
-    const count = await services.countDocuments({
-      vendorId: userId(request.user), status: 'Approved', isActive: { $ne: false },
-    })
-    if (count >= 3 && !service.isActive) return response.status(403).json({ message: 'The Free plan includes up to 3 active services.' })
+    const hasRoom = await freePlanHasRoom(userId(request.user), service._id)
+    if (!hasRoom && !service.isActive) return response.status(403).json({ message: 'The Free plan includes up to 3 active services.' })
   }
   await services.updateOne({ _id: service._id }, { $set: { isActive: request.body.isActive, updatedAt: new Date() } })
   response.json({ message: `Service ${request.body.isActive ? 'activated' : 'paused'}.` })
@@ -392,6 +448,10 @@ app.patch('/admin/services/:id/review', verifyToken, requireRole('admin'), async
   if (!['Approved', 'Rejected'].includes(status)) return response.status(400).json({ message: 'Choose Approved or Rejected.' })
   const service = await findById(services, request.params.id)
   if (!service) return response.status(404).json({ message: 'Service not found.' })
+  if (status === 'Approved' && service.isActive !== false) {
+    const hasRoom = await freePlanHasRoom(service.vendorId, service._id)
+    if (!hasRoom) return response.status(409).json({ message: 'This vendor has reached the 3 active service limit on the Free plan.' })
+  }
   await services.updateOne({ _id: service._id }, { $set: { status, updatedAt: new Date() } })
   response.json({ message: `Service ${status.toLowerCase()}.` })
 })
@@ -401,6 +461,10 @@ app.patch('/admin/services/:id/availability', verifyToken, requireRole('admin'),
   if (!service) return response.status(404).json({ message: 'Service not found.' })
   if (typeof request.body.isActive !== 'boolean') return response.status(400).json({ message: 'Availability must be true or false.' })
   if (request.body.isActive && service.status !== 'Approved') return response.status(409).json({ message: 'Only approved services can be activated.' })
+  if (request.body.isActive && !service.isActive) {
+    const hasRoom = await freePlanHasRoom(service.vendorId, service._id)
+    if (!hasRoom) return response.status(409).json({ message: 'This vendor has reached the 3 active service limit on the Free plan.' })
+  }
   await services.updateOne({ _id: service._id }, { $set: { isActive: request.body.isActive, updatedAt: new Date() } })
   response.json({ message: `Service ${request.body.isActive ? 'activated' : 'paused'}.` })
 })
@@ -569,6 +633,7 @@ async function handleStripeWebhook(request, response) {
           ? new Date(subscription.current_period_end * 1000)
           : null,
       } })
+      if (!isActive) await limitFreeVendorServices(vendorId)
       if (event.type === 'customer.subscription.deleted') {
         await transactions.updateMany(
           { stripeSubscriptionId: subscription.id, status: 'Completed' },
@@ -647,6 +712,35 @@ function userId(user) {
 function isPremium(user) {
   if (user?.subscriptionPlan !== 'Premium') return false
   return !user.subscriptionExpiresAt || new Date(user.subscriptionExpiresAt) > new Date()
+}
+
+async function freePlanHasRoom(vendorId, serviceId) {
+  const vendor = await findById(users, String(vendorId))
+  if (!vendor || vendor.role !== 'vendor') return false
+  if (isPremium(vendor)) return true
+
+  const activeCount = await services.countDocuments({
+    vendorId: String(vendorId),
+    status: 'Approved',
+    isActive: { $ne: false },
+    _id: { $ne: serviceId },
+  })
+  return activeCount < 3
+}
+
+async function limitFreeVendorServices(vendorId) {
+  const extraServices = await services.find({
+    vendorId: String(vendorId),
+    status: 'Approved',
+    isActive: { $ne: false },
+  }).sort({ createdAt: -1 }).skip(3).project({ _id: 1 }).toArray()
+
+  if (extraServices.length) {
+    await services.updateMany(
+      { _id: { $in: extraServices.map((service) => service._id) } },
+      { $set: { isActive: false, updatedAt: new Date() } },
+    )
+  }
 }
 
 function publicUser(user) {

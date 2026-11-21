@@ -10,7 +10,7 @@ Express and MongoDB API for the WedPlan wedding marketplace. It uses the same `w
 
 ## Run locally
 
-1. Copy `.env.example` to `.env` and set MongoDB, frontend origin, Better Auth URL, and Stripe values.
+1. Copy `.env.example` to `.env` and set MongoDB, frontend origin, Better Auth URL, Stripe, and ImgBB values.
 2. Install dependencies with `npm install`.
 3. Start the API with `npm run dev` (or `npm start`). It listens on port 5000 by default.
 
@@ -22,6 +22,7 @@ Express and MongoDB API for the WedPlan wedding marketplace. It uses the same `w
 - Customer: `/bookings`, `/customer/bookings`, `/customer/overview`.
 - Admin: `/admin/overview`, `/admin/users`, `/admin/services`, `/admin/transactions`.
 - Stripe webhook: `POST /payments/webhook`.
+- Image storage: `POST /images/upload` stores PNG, JPG, or WebP images in ImgBB. The API key stays in the backend environment.
 
 Protected API requests require `Authorization: Bearer <Better Auth JWT>`. The API verifies the JWT signature with Better Auth’s JWKS endpoint, then checks the user’s current role and blocked status in MongoDB. Resource ownership, booking transitions, and service approval are checked by the API. Premium access is activated only from a verified Stripe webhook.
 
