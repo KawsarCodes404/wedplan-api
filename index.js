@@ -416,7 +416,13 @@ app.get('/payments/checkout-session/:sessionId', verifyToken, requireRole('vendo
     vendorId: userId(request.user),
   })
   if (!transaction) return response.status(404).json({ message: 'Checkout session not found.' })
-  response.json({ status: transaction.status, plan: transaction.plan })
+  response.json({
+    status: transaction.status,
+    plan: transaction.plan,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    createdAt: transaction.createdAt,
+  })
 })
 
 app.post('/payments/checkout-session', verifyToken, requireRole('vendor'), async (request, response) => {
