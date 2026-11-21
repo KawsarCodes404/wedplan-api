@@ -124,6 +124,13 @@ app.get('/auth/session', verifyToken, (request, response) => {
 // Profile updates accept editable fields only. Role and subscription fields
 // are deliberately not read from the request body.
 app.patch('/users/me', verifyToken, async (request, response) => {
+  if ((request.body.name || '').length > 80 ||
+      (request.body.businessName || '').length > 100 ||
+      (request.body.location || '').length > 120 ||
+      (request.body.bio || '').length > 500) {
+    return response.status(400).json({ message: 'Profile details are longer than allowed.' })
+  }
+
   const name = cleanText(request.body.name, 80)
   const image = cleanImageUrl(request.body.image)
   const businessName = cleanText(request.body.businessName, 100)
