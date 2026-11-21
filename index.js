@@ -488,11 +488,60 @@ app.get('/vendor/transactions', verifyToken, requireRole('vendor'), async (reque
 })
 
 app.get('/payments/checkout-session/:sessionId', verifyToken, requireRole('vendor'), async (request, response) => {
+  if (!stripe) return response.status(503).json({ message: 'Payments are not configured.' })
+
   const transaction = await transactions.findOne({
     stripeSessionId: request.params.sessionId,
     vendorId: userId(request.user),
   })
   if (!transaction) return response.status(404).json({ message: 'Checkout session not found.' })
+
+  const checkout = await stripe.checkout.sessions.retrieve(request.params.sessionId)
+  if (checkout.metadata?.vendorId !== userId(request.user)) {
+    return response.status(403).json({ message: 'This checkout belongs to another vendor.' })
+  }
+
+  if (checkout.mode === 'subscription' && checkout.payment_status === 'paid') {
+    const subscriptionId = typeof checkout.subscription === 'string'
+      ? checkout.subscription
+      : checkout.subscription?.id
+    const subscription = subscriptionId
+      ? await stripe.subscriptions.retrieve(subscriptionId)
+      : null
+
+    if (subscription && ['active', 'trialing'].includes(subscription.status)) {
+      const expiresAt = subscription.current_period_end
+        ? new Date(subscription.current_period_end * 1000)
+        : null
+
+      await users.updateOne({ _id: request.user._id }, { $set: {
+        subscriptionPlan: 'Premium',
+        subscriptionExpiresAt: expiresAt,
+      } })
+      await transactions.updateOne(
+        { stripeSessionId: checkout.id, vendorId: userId(request.user) },
+        { $set: {
+          plan: 'Premium',
+          amount: checkout.amount_total || premiumAmount(),
+          currency: (checkout.currency || premiumCurrency()).toUpperCase(),
+          stripeSubscriptionId: subscriptionId,
+          status: 'Completed',
+          completedAt: new Date(),
+        } },
+      )
+      transaction.status = 'Completed'
+      transaction.plan = 'Premium'
+      transaction.amount = checkout.amount_total || premiumAmount()
+      transaction.currency = (checkout.currency || premiumCurrency()).toUpperCase()
+    }
+  } else if (checkout.status === 'expired') {
+    await transactions.updateOne(
+      { stripeSessionId: checkout.id, status: 'Pending' },
+      { $set: { status: 'Cancelled', updatedAt: new Date() } },
+    )
+    transaction.status = 'Cancelled'
+  }
+
   response.json({
     status: transaction.status,
     plan: transaction.plan,
