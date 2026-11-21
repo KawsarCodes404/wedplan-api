@@ -1,10 +1,16 @@
 # WedPlan API
 
-Express and MongoDB API for the WedPlan marketplace. It uses the same `wed-plan` database as Better Auth, reading its `user` and `session` collections and storing marketplace data in `services`, `bookings`, and `transactions`.
+Express and MongoDB API for the WedPlan wedding marketplace. It uses the same `wed-plan` database as Better Auth and stores marketplace data in `services`, `bookings`, and `transactions`.
+
+## Links
+
+- Live site: [https://wedplan.nazmussakib.dev](https://wedplan.nazmussakib.dev)
+- Frontend repository: [wed-plan-frontend](https://github.com/KawsarCodes404/wed-plan-frontend)
+- Backend repository: [wed-plan-backend](https://github.com/KawsarCodes404/wed-plan-backend)
 
 ## Run locally
 
-1. Copy `.env.example` to `.env` and set the MongoDB connection string, frontend origin, and Stripe values.
+1. Copy `.env.example` to `.env` and set MongoDB, frontend origin, Better Auth URL, and Stripe values.
 2. Install dependencies with `npm install`.
 3. Start the API with `npm run dev` (or `npm start`). It listens on port 5000 by default.
 
@@ -17,7 +23,9 @@ Express and MongoDB API for the WedPlan marketplace. It uses the same `wed-plan`
 - Admin: `/admin/overview`, `/admin/users`, `/admin/services`, `/admin/transactions`.
 - Stripe webhook: `POST /payments/webhook`.
 
-Protected API requests require `Authorization: Bearer <Better Auth session token>`. Role, ownership, booking transitions, service approval, and subscription activation are checked by the API. Premium access is activated only from a verified Stripe webhook.
+Protected API requests require `Authorization: Bearer <Better Auth JWT>`. The API verifies the JWT signature with Better Auth’s JWKS endpoint, then checks the user’s current role and blocked status in MongoDB. Resource ownership, booking transitions, and service approval are checked by the API. Premium access is activated only from a verified Stripe webhook.
+
+The API creates indexes for public service searches, vendor and customer dashboards, booking lookups, and Stripe transaction history when it starts.
 
 ## Stripe Premium setup
 
