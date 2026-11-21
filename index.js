@@ -3,10 +3,13 @@ import cors from 'cors'
 import express from 'express'
 import { MongoClient, ObjectId } from 'mongodb'
 import Stripe from 'stripe'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 const app = express()
 const port = Number(process.env.PORT || 5000)
 const databaseName = process.env.DB_NAME || 'wed-plan'
+const authOrigin = new URL(process.env.BETTER_AUTH_URL || 'http://localhost:3000').origin
+const authKeys = createRemoteJWKSet(new URL('/api/auth/jwks', authOrigin))
 const mongoUri = process.env.MONGODB_URI || buildMongoUriFromLegacyCredentials()
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -466,15 +469,25 @@ async function verifyToken(request, response, next) {
     const token = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1]
     if (!token) return response.status(401).json({ message: 'Sign in to continue.' })
 
-    const session = await sessions.findOne({ token, expiresAt: { $gt: new Date() } })
-    if (!session) return response.status(401).json({ message: 'Your session is invalid or expired.' })
+    const { payload } = await jwtVerify(token, authKeys, {
+      issuer: authOrigin,
+      audience: authOrigin,
+    })
+    if (!payload.sub) return response.status(401).json({ message: 'Your token is invalid or expired.' })
 
-    const user = await findById(users, String(session.userId))
+    const user = await findById(users, String(payload.sub))
     if (!user) return response.status(401).json({ message: 'Account not found.' })
     if (user.isBlocked) return response.status(403).json({ message: 'This account is blocked.' })
     request.user = user
     return next()
   } catch (error) {
+    if (
+      error.code?.startsWith('ERR_JWT') ||
+      error.code?.startsWith('ERR_JWS') ||
+      error.code === 'ERR_JWKS_NO_MATCHING_KEY'
+    ) {
+      return response.status(401).json({ message: 'Your token is invalid or expired.' })
+    }
     return next(error)
   }
 }
