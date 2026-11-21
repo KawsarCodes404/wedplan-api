@@ -406,7 +406,7 @@ app.get('/admin/transactions', verifyToken, requireRole('admin'), async (_reques
 
 // Vendors can inspect only their own subscription payment history.
 app.get('/vendor/transactions', verifyToken, requireRole('vendor'), async (request, response) => {
-  const rows = await transactions.find({ vendorId: userId(request.user) }).sort({ createdAt: -1 }).toArray()
+  const rows = await transactions.find({ vendorId: userId(request.user) }).sort({ createdAt: -1 }).limit(200).toArray()
   response.json(rows)
 })
 
