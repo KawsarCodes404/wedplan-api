@@ -272,10 +272,7 @@ app.patch('/vendor/services/:id/availability', verifyToken, requireRole('vendor'
   if (!service) return response.status(404).json({ message: 'Service not found.' })
   if (service.vendorId !== userId(request.user)) return response.status(403).json({ message: 'You cannot edit this service.' })
   if (typeof request.body.isActive !== 'boolean') return response.status(400).json({ message: 'Availability must be true or false.' })
-  if (request.body.isActive && service.status !== 'Approved') {
-    return response.status(409).json({ message: 'Only approved services can be made available.' })
-  }
-  if (request.body.isActive && !isPremium(request.user)) {
+  if (request.body.isActive && service.status === 'Approved' && !isPremium(request.user)) {
     const hasRoom = await freePlanHasRoom(userId(request.user), service._id)
     if (!hasRoom && !service.isActive) return response.status(403).json({ message: 'The Free plan includes up to 3 active services.' })
   }
