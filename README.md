@@ -49,6 +49,35 @@ The backend API for **WedPlan**, a wedding-services marketplace that connects co
 
    Main settings include `PORT`, `MONGODB_URI`, `DB_NAME`, `CLIENT_URL`, `BETTER_AUTH_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `IMGBB_API_KEY`. See `.env.example` for the complete list.
 
+## Environment Variables
+
+| Variable | Purpose |
+| --- | --- |
+| `MONGODB_URI` | Private MongoDB connection string. Alternatively, configure `DB_USER` and `DB_PASSWORD`. |
+| `DB_USER`, `DB_PASSWORD` | Optional private MongoDB credentials when `MONGODB_URI` is not set. |
+| `MONGODB_HOST` | Optional Atlas host list when using `DB_USER` and `DB_PASSWORD`. |
+| `DB_NAME` | MongoDB database shared with the client Better Auth instance. |
+| `BETTER_AUTH_URL` | Canonical client origin used for JWT issuer, audience, and JWKS verification. |
+| `CLIENT_URL` | Client origin allowed by CORS and used for Stripe redirects. |
+| `PORT` | Local API port; defaults to `5000`. |
+| `STRIPE_SECRET_KEY` | Private Stripe test-mode secret key. |
+| `STRIPE_WEBHOOK_SECRET` | Secret used to verify Stripe webhook signatures. |
+| `STRIPE_PREMIUM_PRICE_ID` | Optional Stripe recurring price. If omitted, the configured amount and currency are used. |
+| `STRIPE_PREMIUM_AMOUNT`, `STRIPE_PREMIUM_CURRENCY` | Premium plan price when no Stripe price ID is configured. |
+| `IMGBB_API_KEY` | Private ImgBB upload key. |
+
+Never expose server keys with a `NEXT_PUBLIC_` prefix or commit `.env` files.
+
+## Deployment
+
+1. Deploy the API with its MongoDB, Better Auth, client URL, Stripe, and ImgBB environment variables.
+2. Set the client's origin as both `BETTER_AUTH_URL` and `CLIENT_URL` on the API. CORS only allows those configured origins and localhost during development.
+3. Deploy the client with the matching MongoDB database and Better Auth settings, Google OAuth credentials, and `NEXT_PUBLIC_API_BASE_URL` pointing to this API.
+4. Add the API's `/payments/webhook` URL in Stripe and enable `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_failed`, `customer.subscription.updated`, and `customer.subscription.deleted` events.
+5. Redeploy the API and client after changing environment variables.
+
+Public registration cannot create admin accounts. Create the account normally, then promote it from a trusted environment with `npm run admin:promote -- admin@example.com`. Keep admin credentials out of GitHub.
+
 ## Run Locally
 
 Start the development server:

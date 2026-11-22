@@ -16,9 +16,11 @@ const imageUploadLimit = rateLimit({
 });
 const port = Number(process.env.PORT || 5000);
 const databaseName = process.env.DB_NAME || 'wed-plan';
-const authOrigin = new URL(
-  process.env.BETTER_AUTH_URL || 'http://localhost:3000'
-).origin;
+const authUrl =
+  process.env.BETTER_AUTH_URL ||
+  (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000');
+if (!authUrl) throw new Error('Set BETTER_AUTH_URL before starting the API.');
+const authOrigin = new URL(authUrl).origin;
 const authKeys = createRemoteJWKSet(new URL('/api/auth/jwks', authOrigin));
 const mongoUri =
   process.env.MONGODB_URI || buildMongoUriFromLegacyCredentials();
@@ -82,8 +84,26 @@ const categories = [
 const validRoles = ['admin', 'vendor', 'customer'];
 const validServiceStatuses = ['Pending', 'Approved', 'Rejected'];
 const validBookingStatuses = ['Pending', 'Accepted', 'Rejected', 'Cancelled'];
+const verifyAdmin = requireRole('admin');
+const verifyVendor = requireRole('vendor');
+const verifyCustomer = requireRole('customer');
 
-app.use(cors());
+const allowedOrigins = new Set(
+  [authOrigin, process.env.CLIENT_URL]
+    .filter(Boolean)
+    .map((origin) => new URL(origin).origin)
+);
+if (process.env.NODE_ENV !== 'production') {
+  allowedOrigins.add('http://localhost:3000');
+}
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      callback(null, !origin || allowedOrigins.has(origin));
+    },
+  })
+);
 
 // Stripe requires the unparsed request body to verify webhook signatures.
 app.post(
@@ -301,7 +321,7 @@ app.patch('/users/me', verifyToken, async (request, response) => {
 app.get(
   '/vendor/services',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const rows = await services
       .find({ vendorId: userId(request.user) })
@@ -314,7 +334,7 @@ app.get(
 app.post(
   '/vendor/services',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const service = parseService(request.body);
     if (!service)
@@ -356,7 +376,7 @@ app.post(
 app.patch(
   '/vendor/services/:id',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const service = await findById(services, request.params.id);
     if (!service)
@@ -383,7 +403,7 @@ app.patch(
 app.patch(
   '/vendor/services/:id/availability',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const service = await findById(services, request.params.id);
     if (!service)
@@ -420,7 +440,7 @@ app.patch(
 app.delete(
   '/vendor/services/:id',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const service = await findById(services, request.params.id);
     if (!service)
@@ -437,7 +457,7 @@ app.delete(
 app.get(
   '/vendor/overview',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const owner = userId(request.user);
     const [serviceCount, activeServices, pendingBookings, acceptedBookings] =
@@ -465,7 +485,7 @@ app.get(
 app.post(
   '/bookings',
   verifyToken,
-  requireRole('customer'),
+  verifyCustomer,
   async (request, response) => {
     const service = await findById(services, request.body.serviceId);
     if (
@@ -528,7 +548,7 @@ app.post(
 app.get(
   '/customer/bookings',
   verifyToken,
-  requireRole('customer'),
+  verifyCustomer,
   async (request, response) => {
     const rows = await bookings
       .find({ customerId: userId(request.user) })
@@ -541,7 +561,7 @@ app.get(
 app.get(
   '/customer/overview',
   verifyToken,
-  requireRole('customer'),
+  verifyCustomer,
   async (request, response) => {
     const owner = userId(request.user);
     const [total, pending, accepted, rejected, recent] = await Promise.all([
@@ -568,7 +588,7 @@ app.get(
 app.patch(
   '/customer/bookings/:id/cancel',
   verifyToken,
-  requireRole('customer'),
+  verifyCustomer,
   async (request, response) => {
     const booking = await findById(bookings, request.params.id);
     if (!booking)
@@ -594,7 +614,7 @@ app.patch(
 app.get(
   '/vendor/bookings',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const rows = await bookings
       .find({ vendorId: userId(request.user) })
@@ -607,7 +627,7 @@ app.get(
 app.patch(
   '/vendor/bookings/:id/status',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const nextStatus = request.body.status;
     if (!['Accepted', 'Rejected'].includes(nextStatus))
@@ -639,7 +659,7 @@ app.patch(
 app.get(
   '/admin/overview',
   verifyToken,
-  requireRole('admin'),
+  verifyAdmin,
   async (_request, response) => {
     const [
       totalUsers,
@@ -678,7 +698,7 @@ app.get(
 app.get(
   '/admin/users',
   verifyToken,
-  requireRole('admin'),
+  verifyAdmin,
   async (request, response) => {
     const filter = {};
     const role = String(request.query.role || '');
@@ -717,7 +737,7 @@ app.get(
 app.patch(
   '/admin/users/:id/block',
   verifyToken,
-  requireRole('admin'),
+  verifyAdmin,
   async (request, response) => {
     if (typeof request.body.isBlocked !== 'boolean')
       return response
@@ -747,7 +767,7 @@ app.patch(
 app.get(
   '/admin/services',
   verifyToken,
-  requireRole('admin'),
+  verifyAdmin,
   async (request, response) => {
     const filter = {};
     if (validServiceStatuses.includes(String(request.query.status)))
@@ -773,7 +793,7 @@ app.get(
 app.patch(
   '/admin/services/:id/review',
   verifyToken,
-  requireRole('admin'),
+  verifyAdmin,
   async (request, response) => {
     const status = request.body.status;
     if (!['Approved', 'Rejected'].includes(status))
@@ -804,7 +824,7 @@ app.patch(
 app.patch(
   '/admin/services/:id/availability',
   verifyToken,
-  requireRole('admin'),
+  verifyAdmin,
   async (request, response) => {
     const service = await findById(services, request.params.id);
     if (!service)
@@ -840,7 +860,7 @@ app.patch(
 app.delete(
   '/admin/services/:id',
   verifyToken,
-  requireRole('admin'),
+  verifyAdmin,
   async (request, response) => {
     const service = await findById(services, request.params.id);
     if (!service)
@@ -853,7 +873,7 @@ app.delete(
 app.get(
   '/admin/transactions',
   verifyToken,
-  requireRole('admin'),
+  verifyAdmin,
   async (_request, response) => {
     const rows = await transactions
       .find({})
@@ -868,7 +888,7 @@ app.get(
 app.get(
   '/vendor/transactions',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     const rows = await transactions
       .find({ vendorId: userId(request.user) })
@@ -882,7 +902,7 @@ app.get(
 app.get(
   '/payments/checkout-session/:sessionId',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     if (!stripe)
       return response
@@ -977,7 +997,7 @@ app.get(
 app.post(
   '/payments/checkout-session',
   verifyToken,
-  requireRole('vendor'),
+  verifyVendor,
   async (request, response) => {
     if (!stripe)
       return response
@@ -987,14 +1007,14 @@ app.post(
       return response
         .status(409)
         .json({ message: 'Your Premium plan is already active.' });
-    const origin = (process.env.CLIENT_URL || 'http://localhost:3000').replace(
-      /\/$/,
-      ''
-    );
-    if (!origin)
+    const clientUrl =
+      process.env.CLIENT_URL ||
+      (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000');
+    if (!clientUrl)
       return response
         .status(503)
         .json({ message: 'Application URL is not configured.' });
+    const origin = new URL(clientUrl).origin;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
