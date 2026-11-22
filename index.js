@@ -1007,14 +1007,8 @@ app.post(
       return response
         .status(409)
         .json({ message: 'Your Premium plan is already active.' });
-    const clientUrl =
-      process.env.CLIENT_URL ||
-      (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000');
-    if (!clientUrl)
-      return response
-        .status(503)
-        .json({ message: 'Application URL is not configured.' });
-    const origin = new URL(clientUrl).origin;
+    // BETTER_AUTH_URL is the canonical client origin and is required in production.
+    const origin = new URL(process.env.CLIENT_URL || authOrigin).origin;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

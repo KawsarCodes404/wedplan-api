@@ -58,7 +58,7 @@ The backend API for **WedPlan**, a wedding-services marketplace that connects co
 | `MONGODB_HOST` | Optional Atlas host list when using `DB_USER` and `DB_PASSWORD`. |
 | `DB_NAME` | MongoDB database shared with the client Better Auth instance. |
 | `BETTER_AUTH_URL` | Canonical client origin used for JWT issuer, audience, and JWKS verification. |
-| `CLIENT_URL` | Client origin allowed by CORS and used for Stripe redirects. |
+| `CLIENT_URL` | Optional client origin allowed by CORS and used for Stripe redirects. Defaults to `BETTER_AUTH_URL`. |
 | `PORT` | Local API port; defaults to `5000`. |
 | `STRIPE_SECRET_KEY` | Private Stripe test-mode secret key. |
 | `STRIPE_WEBHOOK_SECRET` | Secret used to verify Stripe webhook signatures. |
@@ -71,7 +71,7 @@ Never expose server keys with a `NEXT_PUBLIC_` prefix or commit `.env` files.
 ## Deployment
 
 1. Deploy the API with its MongoDB, Better Auth, client URL, Stripe, and ImgBB environment variables.
-2. Set the client's origin as both `BETTER_AUTH_URL` and `CLIENT_URL` on the API. CORS only allows those configured origins and localhost during development.
+2. Set `BETTER_AUTH_URL` to the deployed client origin on the API. Stripe redirects use `CLIENT_URL` when set, otherwise they use `BETTER_AUTH_URL`. CORS allows those configured origins and localhost during development.
 3. Deploy the client with the matching MongoDB database and Better Auth settings, Google OAuth credentials, and `NEXT_PUBLIC_API_BASE_URL` pointing to this API.
 4. Add the API's `/payments/webhook` URL in Stripe and enable `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_failed`, `customer.subscription.updated`, and `customer.subscription.deleted` events.
 5. Redeploy the API and client after changing environment variables.
