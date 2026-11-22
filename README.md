@@ -27,7 +27,7 @@ The backend API for **WedPlan**, a wedding-services marketplace that connects co
 | App | Live URL |
 | --- | --- |
 | Client website | [wedplan-marketplace.vercel.app](https://wedplan-marketplace.vercel.app) |
-| Server API | [wedplan-api-cyan.vercel.app](https://wedplan-api-cyan.vercel.app) |
+| Server project on Vercel | [wedplan-api](https://vercel.com/ridwanul-hoque-kawsar/wedplan-api) |
 
 ## Repositories
 
