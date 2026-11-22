@@ -4,7 +4,8 @@ Express and MongoDB API for the WedPlan wedding marketplace. It uses the same `w
 
 ## Links
 
-- Live site: [https://wedplan.nazmussakib.dev](https://wedplan.nazmussakib.dev)
+- Live site: [https://wedplan-marketplace.vercel.app](https://wedplan-marketplace.vercel.app)
+- Production API: [https://wedplan-api-cyan.vercel.app](https://wedplan-api-cyan.vercel.app)
 - Frontend repository: [wed-plan-frontend](https://github.com/KawsarCodes404/wed-plan-frontend)
 - Backend repository: [wed-plan-backend](https://github.com/KawsarCodes404/wed-plan-backend)
 
