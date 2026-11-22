@@ -4,12 +4,6 @@ The backend API for **WedPlan**, a wedding-services marketplace that connects co
 
 ## Features
 
-<<<<<<< HEAD
-- Live site: [https://wedplan-marketplace.vercel.app](https://wedplan-marketplace.vercel.app)
-- Production API: [https://wedplan-api-cyan.vercel.app](https://wedplan-api-cyan.vercel.app)
-- Frontend repository: [wed-plan-frontend](https://github.com/KawsarCodes404/wed-plan-frontend)
-- Backend repository: [wed-plan-backend](https://github.com/KawsarCodes404/wed-plan-backend)
-=======
 - Public service and category endpoints with keyword, category, location, and price or newest sorting.
 - Customer booking creation and booking history.
 - Vendor service management, booking responses, overview data, and subscription status.
@@ -18,7 +12,6 @@ The backend API for **WedPlan**, a wedding-services marketplace that connects co
 - Stripe Checkout subscriptions. A verified Stripe webhook activates or updates Premium; the success page alone does not grant access.
 - ImgBB image uploads through the API, keeping the API key on the server.
 - MongoDB indexes for common marketplace queries.
->>>>>>> origin/main
 
 ## Technology Stack
 
@@ -29,10 +22,15 @@ The backend API for **WedPlan**, a wedding-services marketplace that connects co
 - ImgBB image hosting
 - Vercel deployment
 
-## Project Links
+## Live Websites
 
-- **Live website:** [wedplan-marketplace.vercel.app](https://wedplan-marketplace.vercel.app)
-- **Live API:** [wedplan-api-cyan.vercel.app](https://wedplan-api-cyan.vercel.app)
+| App | Live URL |
+| --- | --- |
+| Client website | [wedplan-marketplace.vercel.app](https://wedplan-marketplace.vercel.app) |
+| Server API | [wedplan-api-cyan.vercel.app](https://wedplan-api-cyan.vercel.app) |
+
+## Repositories
+
 - **Client repository:** [wedplan-marketplace](https://github.com/KawsarCodes404/wedplan-marketplace)
 - **Server repository:** [wedplan-api](https://github.com/KawsarCodes404/wedplan-api)
 
